@@ -7,3 +7,15 @@
 /CMakeFiles
 /Makefile
 /cmake_install.cmake
+*.sln
+*.sdf
+*.suo
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.opensdf
+/ipch
+/Debug
+/Release
+/Win32
+/fancy_cui.dir
