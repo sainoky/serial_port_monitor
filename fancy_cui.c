@@ -41,7 +41,7 @@ static void main_loop(int fd)
 			printf("got data on stdin: %c\n", c);
 			if (c == 'q')
 				break;
-//			write(fd, &c, 1);
+			write(fd, &c, 1);
 		} else if (FD_ISSET(fd, &rfds)) {
 			rsize = read(fd, &c, 1);
 			if (rsize < 0) {
