@@ -67,10 +67,13 @@ static void main_loop(int fd)
 static void _pwinerror(const char *msg, DWORD error_code)
 {
 	LPVOID lpMsgBuf;
+	DWORD flags;
 
-	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-			NULL, error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-			(LPTSTR)&lpMsgBuf, 0, NULL);
+	flags = FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM;
+
+	FormatMessage(flags, NULL, error_code,
+		      MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+		      (LPTSTR)&lpMsgBuf, 0, NULL);
 	printf("%s: %s", msg, lpMsgBuf);
 
 	LocalFree(lpMsgBuf);
@@ -162,7 +165,7 @@ static void main_loop(HANDLE serial_hdl)
 	if (attach_overlapped(serial_hdl, &event_mask, &ov))
 		return;
 	PurgeComm(serial_hdl,
-				PURGE_RXCLEAR | PURGE_TXCLEAR | PURGE_RXABORT | PURGE_TXABORT);
+		  PURGE_RXCLEAR | PURGE_TXCLEAR | PURGE_RXABORT | PURGE_TXABORT);
 
 	/* When events occur at the same time, smaller index has the priority */
 	hdls[0] = stdin_hdl;
@@ -173,7 +176,8 @@ static void main_loop(HANDLE serial_hdl)
 
 		printf("==============================\n");
 		printf("Waiting for event\n");
-		event = WaitForMultipleObjects(ARRAY_SIZE(hdls), hdls, FALSE, INFINITE);
+		event = WaitForMultipleObjects(ARRAY_SIZE(hdls), hdls, FALSE,
+					       INFINITE);
 
 		print_num_stdin_events(stdin_hdl);
 		if (event == WAIT_FAILED) {

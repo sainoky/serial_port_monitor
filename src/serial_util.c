@@ -63,8 +63,8 @@ HANDLE serial_open(const char *fn, DCB *dcb_saved)
 {
 	HANDLE handle;
 
-	handle = CreateFile(fn, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
-			FILE_FLAG_OVERLAPPED, NULL);
+	handle = CreateFile(fn, GENERIC_READ | GENERIC_WRITE, 0, NULL,
+			    OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
 
 	if (handle == INVALID_HANDLE_VALUE)
 		return handle;
