@@ -7,7 +7,6 @@
 #include <termios.h>
 #else	/* _MSC_VER */
 #include <Windows.h>
-#include <conio.h>
 #endif	/* _MSC_VER */
 #include "serial_util.h"
 
@@ -96,20 +95,33 @@ static int attach_overlapped(HANDLE serial_hdl, DWORD *mask, OVERLAPPED *ov)
 	return 0;
 }
 
-static void print_num_stdin_events(HANDLE stdin_hdl)
+static int is_key_down_event(HANDLE stdin_hdl, unsigned char *c)
 {
-	DWORD num_stdin_events = 0;
-	GetNumberOfConsoleInputEvents(stdin_hdl, &num_stdin_events);
-	printf("num_stdin_events = %d\n", num_stdin_events);
+	INPUT_RECORD rec;
+	DWORD len;
+
+	if (!ReadConsoleInput(stdin_hdl, &rec, 1, &len)) {
+		pwinerror("ReadConsoleInput");
+		return 0;
+	}
+	if (rec.EventType != KEY_EVENT)
+		return 0;
+	if (!rec.Event.KeyEvent.bKeyDown)
+		return 0;
+
+	*c = rec.Event.KeyEvent.uChar.AsciiChar;
+	return 1;
 }
 
-static int send_serial(HANDLE serial_hdl)
+static int send_serial(HANDLE stdin_hdl, HANDLE serial_hdl)
 {
 	OVERLAPPED tmp_ov = {0};
 	DWORD len;
 	unsigned char c;
 
-	c = (unsigned char)_getch();
+	if (!is_key_down_event(stdin_hdl, &c))
+		return 0;
+
 	printf("got data on stdin: %c\n", c);
 
 	if (c == 'q')
@@ -179,13 +191,12 @@ static void main_loop(HANDLE serial_hdl)
 		event = WaitForMultipleObjects(ARRAY_SIZE(hdls), hdls, FALSE,
 					       INFINITE);
 
-		print_num_stdin_events(stdin_hdl);
 		if (event == WAIT_FAILED) {
 			pwinerror("WaitForMultipleObjects");
 			break;
 		} else if (event == WAIT_OBJECT_0) {
 			printf("==>Enter stdin event block\n");
-			if (send_serial(serial_hdl))
+			if (send_serial(stdin_hdl, serial_hdl))
 				break;
 			printf("<==Leave stdin event block\n");
 		} else if (event == WAIT_OBJECT_0 + 1) {
@@ -202,8 +213,9 @@ static void main_loop(HANDLE serial_hdl)
 			printf("Unknown event: 0x%x\n", event);
 			break;
 		}
-		print_num_stdin_events(stdin_hdl);
 	}
+	CloseHandle(ov.hEvent);
+	CloseHandle(stdin_hdl);
 }
 #endif	/* _MSC_VER */
 
