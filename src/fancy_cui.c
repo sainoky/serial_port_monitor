@@ -83,18 +83,6 @@ static void pwinerror(const char *msg)
 	_pwinerror(msg, GetLastError());
 }
 
-static int attach_overlapped(HANDLE serial_hdl, DWORD *mask, OVERLAPPED *ov)
-{
-	if (!WaitCommEvent(serial_hdl, mask, ov)) {
-		DWORD e = GetLastError();
-		if (e != ERROR_IO_PENDING) {
-			_pwinerror("WaitCommEvent", e);
-			return 1;
-		}
-	}
-	return 0;
-}
-
 static int is_key_down_event(HANDLE stdin_hdl, unsigned char *c)
 {
 	INPUT_RECORD rec;
@@ -137,21 +125,15 @@ static int send_serial(HANDLE stdin_hdl, HANDLE serial_hdl)
 	return 0;
 }
 
-static int receive_serial(HANDLE serial_hdl)
+int try_read(HANDLE serial_hdl, void *buf, int bytes, OVERLAPPED *ov)
 {
-	OVERLAPPED tmp_ov = {0};
-	DWORD len;
-	unsigned char c;
-
-	if (!ReadFile(serial_hdl, &c, sizeof(c), &len, &tmp_ov)) {
+	if (!ReadFile(serial_hdl, buf, bytes, NULL, ov)) {
 		DWORD e = GetLastError();
 		if (e != ERROR_IO_PENDING) {
 			_pwinerror("ReadFile", e);
 			return 1;
 		}
 	}
-	printf("\t\t\t\tgot data on serial: 0x%02x\n", c);
-
 	return 0;
 }
 
@@ -160,7 +142,7 @@ static void main_loop(HANDLE serial_hdl)
 	HANDLE stdin_hdl;
 	HANDLE hdls[2];
 	OVERLAPPED ov = {0};
-	DWORD event_mask;
+	unsigned char c;
 
 	stdin_hdl = GetStdHandle(STD_INPUT_HANDLE);
 	if (stdin_hdl == INVALID_HANDLE_VALUE) {
@@ -168,16 +150,12 @@ static void main_loop(HANDLE serial_hdl)
 		return;
 	}
 	FlushConsoleInputBuffer(stdin_hdl);
-
-	if (!SetCommMask(serial_hdl, EV_RXCHAR)) {
-		pwinerror("SetCommMask");
-		return;
-	}
-	ov.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-	if (attach_overlapped(serial_hdl, &event_mask, &ov))
-		return;
 	PurgeComm(serial_hdl,
 		  PURGE_RXCLEAR | PURGE_TXCLEAR | PURGE_RXABORT | PURGE_TXABORT);
+
+	ov.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+	if (try_read(serial_hdl, &c, sizeof(c), &ov))
+		return;
 
 	/* When events occur at the same time, smaller index has the priority */
 	hdls[0] = stdin_hdl;
@@ -185,9 +163,6 @@ static void main_loop(HANDLE serial_hdl)
 
 	for (;;) {
 		int event;
-
-		printf("==============================\n");
-		printf("Waiting for event\n");
 		event = WaitForMultipleObjects(ARRAY_SIZE(hdls), hdls, FALSE,
 					       INFINITE);
 
@@ -195,20 +170,12 @@ static void main_loop(HANDLE serial_hdl)
 			pwinerror("WaitForMultipleObjects");
 			break;
 		} else if (event == WAIT_OBJECT_0) {
-			printf("==>Enter stdin event block\n");
 			if (send_serial(stdin_hdl, serial_hdl))
 				break;
-			printf("<==Leave stdin event block\n");
 		} else if (event == WAIT_OBJECT_0 + 1) {
-			printf("==>Enter serial event block\n");
-			if (receive_serial(serial_hdl))
+			printf("\t\t\t\tgot data on serial: 0x%02x\n", c);
+			if (try_read(serial_hdl, &c, sizeof(c), &ov))
 				break;
-
-			ResetEvent(ov.hEvent);
-			if (attach_overlapped(serial_hdl, &event_mask, &ov))
-				break;
-
-			printf("<==Leave serial event block\n");
 		} else {
 			printf("Unknown event: 0x%x\n", event);
 			break;
