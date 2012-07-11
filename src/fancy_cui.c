@@ -66,11 +66,10 @@ static void main_loop(int fd)
 static void _pwinerror(const char *msg, DWORD error_code)
 {
 	LPVOID lpMsgBuf;
-	DWORD flags;
 
-	flags = FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM;
-
-	FormatMessage(flags, NULL, error_code,
+	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+	              FORMAT_MESSAGE_FROM_SYSTEM,
+		      NULL, error_code,
 		      MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 		      (LPTSTR)&lpMsgBuf, 0, NULL);
 	printf("%s: %s", msg, lpMsgBuf);
@@ -101,31 +100,37 @@ static int is_key_down_event(HANDLE stdin_hdl, unsigned char *c)
 	return 1;
 }
 
-static int send_serial(HANDLE stdin_hdl, HANDLE serial_hdl)
+static int write(HANDLE serial_hdl, const void *buf, int bytes)
 {
-	OVERLAPPED tmp_ov = {0};
-	DWORD len;
-	unsigned char c;
+	int ret = 0;
+	OVERLAPPED ov = {0};
+	DWORD err_code;
+	const DWORD TIMEOUT_MSEC = 200;
 
-	if (!is_key_down_event(stdin_hdl, &c))
-		return 0;
+	ov.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
 
-	printf("got data on stdin: %c\n", c);
+	if (WriteFile(serial_hdl, buf, bytes, NULL, &ov))
+		goto out;	// write completed
 
-	if (c == 'q')
-		return 1;
-
-	if (!WriteFile(serial_hdl, &c, sizeof(c), &len, &tmp_ov)) {
-		DWORD e = GetLastError();
-		if (e != ERROR_IO_PENDING) {
-			_pwinerror("WriteFile", e);
-			return 1;
-		}
+	err_code = GetLastError();
+	if (err_code != ERROR_IO_PENDING) {
+		_pwinerror("WriteFile", err_code);
+		ret = 1;
+		goto out;
 	}
-	return 0;
+
+	// Wait until write completed.
+	if (WaitForSingleObject(ov.hEvent, TIMEOUT_MSEC) != WAIT_OBJECT_0) {
+		pwinerror("WaitForSingleObject");
+		ret = 1;
+	}
+
+out:
+	CloseHandle(ov.hEvent);
+	return ret;
 }
 
-int try_read(HANDLE serial_hdl, void *buf, int bytes, OVERLAPPED *ov)
+static int try_read(HANDLE serial_hdl, void *buf, int bytes, OVERLAPPED *ov)
 {
 	if (!ReadFile(serial_hdl, buf, bytes, NULL, ov)) {
 		DWORD e = GetLastError();
@@ -142,7 +147,7 @@ static void main_loop(HANDLE serial_hdl)
 	HANDLE stdin_hdl;
 	HANDLE hdls[2];
 	OVERLAPPED ov = {0};
-	unsigned char c;
+	unsigned char ser_in;
 
 	stdin_hdl = GetStdHandle(STD_INPUT_HANDLE);
 	if (stdin_hdl == INVALID_HANDLE_VALUE) {
@@ -154,7 +159,7 @@ static void main_loop(HANDLE serial_hdl)
 		  PURGE_RXCLEAR | PURGE_TXCLEAR | PURGE_RXABORT | PURGE_TXABORT);
 
 	ov.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-	if (try_read(serial_hdl, &c, sizeof(c), &ov))
+	if (try_read(serial_hdl, &ser_in, sizeof(ser_in), &ov))
 		return;
 
 	/* When events occur at the same time, smaller index has the priority */
@@ -170,11 +175,20 @@ static void main_loop(HANDLE serial_hdl)
 			pwinerror("WaitForMultipleObjects");
 			break;
 		} else if (event == WAIT_OBJECT_0) {
-			if (send_serial(stdin_hdl, serial_hdl))
+			unsigned char std_in;
+			if (!is_key_down_event(stdin_hdl, &std_in))
+				continue;
+
+			printf("got data on stdin: %c\n", std_in);
+			if (std_in == 'q')
+				break;
+
+			if (write(serial_hdl, &std_in, sizeof(std_in)))
 				break;
 		} else if (event == WAIT_OBJECT_0 + 1) {
-			printf("\t\t\t\tgot data on serial: 0x%02x\n", c);
-			if (try_read(serial_hdl, &c, sizeof(c), &ov))
+			printf("\t\t\t\tgot data on serial: 0x%02x\n", ser_in);
+			ResetEvent(ov.hEvent);
+			if (try_read(serial_hdl, &ser_in, sizeof(ser_in), &ov))
 				break;
 		} else {
 			printf("Unknown event: 0x%x\n", event);
