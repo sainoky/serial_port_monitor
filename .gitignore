@@ -1,6 +1,4 @@
 *.o
-*~
-.*.swp
 /fancy_cui
 /fancy_cui.exe
 /CMakeCache.txt
