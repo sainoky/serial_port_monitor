@@ -147,6 +147,7 @@ static void main_loop(HANDLE serial_hdl)
 	OVERLAPPED ov = {0};
 	unsigned char ser_in;
 	unsigned char std_in;
+	DWORD rlen;
 
 	stdin_hdl = GetStdHandle(STD_INPUT_HANDLE);
 	if (stdin_hdl == INVALID_HANDLE_VALUE) {
@@ -181,7 +182,12 @@ static void main_loop(HANDLE serial_hdl)
 				goto out;
 			break;
 		case WAIT_OBJECT_0 + 1:
-			printf("\t\t\t\tgot data on serial: 0x%02x\n", ser_in);
+			/* NOTE: enters here without serial data
+			 * once in a sec. don't know why. */
+			GetOverlappedResult(serial_hdl, &ov, &rlen, FALSE);
+			if (rlen > 0)
+				printf("\t\t\t\tgot data on serial: 0x%02x\n",
+				       ser_in);
 
 			/* Next try */
 			ResetEvent(ov.hEvent);
