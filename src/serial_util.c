@@ -4,12 +4,13 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
+#define BAUDRATE B115200
 #else	/* _MSC_VER */
 #include <Windows.h>
+#define BAUDRATE CBR_115200
 #endif	/* _MSC_VER */
 
 #ifndef _MSC_VER
-#define BAUDRATE B115200
 
 static void serial_setup_tio(int fd)
 {
@@ -49,7 +50,7 @@ static void serial_setup_dcb(HANDLE handle, const DCB *dcb_saved)
 	DCB new_dcb;
 
 	memcpy(&new_dcb, dcb_saved, sizeof(DCB));
-	new_dcb.BaudRate = 115200;
+	new_dcb.BaudRate = BAUDRATE;
 	new_dcb.ByteSize = 8;
 	new_dcb.Parity   = NOPARITY;
 	new_dcb.StopBits = ONESTOPBIT;

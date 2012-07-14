@@ -105,12 +105,11 @@ static int write(HANDLE serial_hdl, const void *buf, int bytes)
 	int ret = 0;
 	OVERLAPPED ov = {0};
 	DWORD err_code;
-	const DWORD TIMEOUT_MSEC = 200;
+	const DWORD TIMEOUT_MSEC = 200;	/* arbitrary */
 
 	ov.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
-
 	if (WriteFile(serial_hdl, buf, bytes, NULL, &ov))
-		goto out;	// write completed
+		goto out;	/* write completed */
 
 	err_code = GetLastError();
 	if (err_code != ERROR_IO_PENDING) {
@@ -119,12 +118,11 @@ static int write(HANDLE serial_hdl, const void *buf, int bytes)
 		goto out;
 	}
 
-	// Wait until write completed.
+	/* Wait until write completed. */
 	if (WaitForSingleObject(ov.hEvent, TIMEOUT_MSEC) != WAIT_OBJECT_0) {
 		pwinerror("WaitForSingleObject");
 		ret = 1;
 	}
-
 out:
 	CloseHandle(ov.hEvent);
 	return ret;
@@ -148,53 +146,55 @@ static void main_loop(HANDLE serial_hdl)
 	HANDLE hdls[2];
 	OVERLAPPED ov = {0};
 	unsigned char ser_in;
+	unsigned char std_in;
 
 	stdin_hdl = GetStdHandle(STD_INPUT_HANDLE);
 	if (stdin_hdl == INVALID_HANDLE_VALUE) {
 		pwinerror("GetStdHandle");
 		return;
 	}
+
 	FlushConsoleInputBuffer(stdin_hdl);
 	PurgeComm(serial_hdl,
 		  PURGE_RXCLEAR | PURGE_TXCLEAR | PURGE_RXABORT | PURGE_TXABORT);
 
 	ov.hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+	/* Make incoming packet turn ov.hEvent signaled. */
 	if (try_read(serial_hdl, &ser_in, sizeof(ser_in), &ov))
-		return;
+		goto out;
 
-	/* When events occur at the same time, smaller index has the priority */
+	/* Smaller index has the priority when events occur at the same time. */
 	hdls[0] = stdin_hdl;
 	hdls[1] = ov.hEvent;
 
 	for (;;) {
-		int event;
-		event = WaitForMultipleObjects(ARRAY_SIZE(hdls), hdls, FALSE,
-					       INFINITE);
-
-		if (event == WAIT_FAILED) {
-			pwinerror("WaitForMultipleObjects");
-			break;
-		} else if (event == WAIT_OBJECT_0) {
-			unsigned char std_in;
+		int event = WaitForMultipleObjects(ARRAY_SIZE(hdls), hdls,
+						   FALSE, INFINITE);
+		switch (event) {
+		case WAIT_OBJECT_0:
 			if (!is_key_down_event(stdin_hdl, &std_in))
 				continue;
-
 			printf("got data on stdin: %c\n", std_in);
 			if (std_in == 'q')
-				break;
-
+				goto out;
 			if (write(serial_hdl, &std_in, sizeof(std_in)))
-				break;
-		} else if (event == WAIT_OBJECT_0 + 1) {
+				goto out;
+			break;
+		case WAIT_OBJECT_0 + 1:
 			printf("\t\t\t\tgot data on serial: 0x%02x\n", ser_in);
+
+			/* Next try */
 			ResetEvent(ov.hEvent);
 			if (try_read(serial_hdl, &ser_in, sizeof(ser_in), &ov))
-				break;
-		} else {
-			printf("Unknown event: 0x%x\n", event);
+				goto out;
 			break;
+		default:
+			pwinerror("WaitForMultipleObjects");
+			goto out;
 		}
 	}
+out:
+	CancelIo(serial_hdl);
 	CloseHandle(ov.hEvent);
 	CloseHandle(stdin_hdl);
 }
