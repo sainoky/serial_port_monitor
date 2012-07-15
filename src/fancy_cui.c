@@ -182,12 +182,12 @@ static void main_loop(HANDLE serial_hdl)
 				goto out;
 			break;
 		case WAIT_OBJECT_0 + 1:
-			/* NOTE: enters here without serial data
-			 * once in a sec. don't know why. */
 			GetOverlappedResult(serial_hdl, &ov, &rlen, FALSE);
 			if (rlen > 0)
 				printf("\t\t\t\tgot data on serial: 0x%02x\n",
 				       ser_in);
+			else
+				printf("serial read timeout\n");
 
 			/* Next try */
 			ResetEvent(ov.hEvent);
