@@ -63,6 +63,7 @@ static void serial_setup_dcb(HANDLE handle, const DCB *dcb_saved)
 HANDLE serial_open(const char *fn, DCB *dcb_saved)
 {
 	HANDLE handle;
+	COMMTIMEOUTS to;
 
 	handle = CreateFile(fn, GENERIC_READ | GENERIC_WRITE, 0, NULL,
 			    OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
@@ -72,6 +73,13 @@ HANDLE serial_open(const char *fn, DCB *dcb_saved)
 
 	GetCommState(handle, dcb_saved);
 	serial_setup_dcb(handle, dcb_saved);
+
+	/* setup timeout */
+	GetCommTimeouts(handle, &to);
+	to.ReadIntervalTimeout = 0;
+	to.ReadTotalTimeoutConstant = 0;
+	SetCommTimeouts(handle, &to);
+
 	return handle;
 }
 
