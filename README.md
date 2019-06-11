@@ -1,6 +1,6 @@
 # serial port monitor
 
-This is probably the only code workable for pure c language serial communication.
+This is probably the only workable code for pure c language serial communication.
 
 I have fixed the bug that the code cannot be compiled on Windows with MingW and have pulled a request, but it seems like the author has stopped maintaining this repo, so you can just use mine instead of the original one.
 
