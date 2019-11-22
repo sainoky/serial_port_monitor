@@ -1,16 +1,16 @@
 #include <stdio.h>
-#ifndef _MSC_VER
+#ifndef _WIN32
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
 #define BAUDRATE B115200
-#else	/* _MSC_VER */
+#else	/* _WIN32 */
 #include <Windows.h>
 #define BAUDRATE CBR_115200
-#endif	/* _MSC_VER */
+#endif	/* _WIN32 */
 
-#ifndef _MSC_VER
+#ifndef _WIN32
 
 static void serial_setup_tio(int fd)
 {
@@ -44,7 +44,7 @@ void serial_close(int fd, const struct termios *tio_saved)
 	tcsetattr(fd, TCSANOW, tio_saved);
 	close(fd);
 }
-#else	/* _MSC_VER */
+#else	/* _WIN32 */
 static void serial_setup_dcb(HANDLE handle, const DCB *dcb_saved)
 {
 	DCB new_dcb;
@@ -88,4 +88,4 @@ void serial_close(HANDLE handle, const DCB *dcb_saved)
 	SetCommState(handle, (DCB *)dcb_saved);
 	CloseHandle(handle);
 }
-#endif	/* _MSC_VER */
+#endif	/* _WIN32 */

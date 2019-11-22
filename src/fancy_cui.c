@@ -1,18 +1,18 @@
 #include <stdio.h>
-#ifndef _MSC_VER
+#ifndef _WIN32
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <memory.h>
 #include <termios.h>
-#else	/* _MSC_VER */
+#else	/* _WIN32 */
 #include <Windows.h>
-#endif	/* _MSC_VER */
+#endif	/* _WIN32 */
 #include "serial_util.h"
 
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 
-#ifndef _MSC_VER
+#ifndef _WIN32
 static void main_loop(int fd)
 {
 	struct termios newstdtio, oldstdtio;
@@ -62,7 +62,7 @@ static void main_loop(int fd)
 	tcsetattr(STDIN_FILENO, TCSANOW, &oldstdtio);
 }
 
-#else	/* _MSC_VER */
+#else	/* _WIN32 */
 static void _pwinerror(const char *msg, DWORD error_code)
 {
 	LPVOID lpMsgBuf;
@@ -204,17 +204,17 @@ out:
 	CloseHandle(ov.hEvent);
 	CloseHandle(stdin_hdl);
 }
-#endif	/* _MSC_VER */
+#endif	/* _WIN32 */
 
 int main(int argc, char **argv)
 {
-#ifndef _MSC_VER
+#ifndef _WIN32
 	int fd;
 	struct termios oldtio;
-#else	/* _MSC_VER */
+#else	/* _WIN32 */
 	HANDLE handle;
 	DCB olddcb;
-#endif	/* _MSC_VER */
+#endif	/* _WIN32 */
 	char *devname;
 
 	if (argc == 2) {
@@ -224,25 +224,25 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-#ifndef _MSC_VER
+#ifndef _WIN32
 	if ((fd = serial_open(devname, &oldtio)) < 0) {
 		perror(devname);
-#else	/* _MSC_VER */
+#else	/* _WIN32 */
 	if ((handle = serial_open(devname, &olddcb)) < 0) {
 		pwinerror(devname);
-#endif	/* _MSC_VER */
+#endif	/* _WIN32 */
 		return 1;
 	}
 
-#ifndef _MSC_VER
+#ifndef _WIN32
 	main_loop(fd);
 
 	serial_close(fd, &oldtio);
-#else	/* _MSC_VER */
+#else	/* _WIN32 */
 	main_loop(handle);
 
 	serial_close(handle, &olddcb);
-#endif	/* _MSC_VER */
+#endif	/* _WIN32 */
 
 	return 0;
 }
